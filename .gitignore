@@ -1,0 +1,28 @@
+# ---- Archivos compilados de Java / Maven ----
+target/
+out/
+*.class
+*.jar
+*.war
+
+# ---- IntelliJ IDEA ----
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# ---- Otros IDE (por si algún integrante usa otro) ----
+.vscode/
+.classpath
+.project
+.settings/
+nbproject/
+
+# ---- Datos generados por la aplicación ----
+# Los archivos JSON se crean al ejecutar; no son código, por eso no se suben.
+data/
+
+# ---- Sistema operativo y registros ----
+.DS_Store
+Thumbs.db
+*.log

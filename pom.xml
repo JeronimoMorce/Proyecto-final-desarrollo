@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Identificación del proyecto -->
+    <groupId>co.edu.eam</groupId>
+    <artifactId>cards4play</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <name>Cards4Play</name>
+    <description>Backend de Cards4Play: inventario, compras, boosters y torneos</description>
+
+    <properties>
+        <!-- Versión de Java con la que se compila el proyecto -->
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <!-- Gson: convierte objetos Java a JSON y al revés.
+             Lo usamos para la persistencia en archivos y para leer la respuesta de la API de tasa de cambio. -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
+
+        <!-- Entrega 3 (API REST): quitar este comentario para agregar Spark Java.
+        <dependency>
+            <groupId>com.sparkjava</groupId>
+            <artifactId>spark-core</artifactId>
+            <version>2.9.4</version>
+        </dependency>
+        -->
+    </dependencies>
+</project>
