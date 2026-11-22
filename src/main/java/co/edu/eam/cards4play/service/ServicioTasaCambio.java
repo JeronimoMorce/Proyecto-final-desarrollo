@@ -21,13 +21,21 @@ import java.time.Duration;
  *  3. La tasa por defecto se lee de la variable de entorno TASA_DEFECTO.
  *  4. El resultado dice de dónde salió la tasa (API o DEFECTO).
  *
- * API usada: https://open.er-api.com/v6/latest/USD (gratuita, sin llave).
- * Responde un JSON parecido a: { "result": "success", "rates": { "COP": 4000.12, ... } }
+ * API usada: ExchangeRate-API v6 (con llave).
+ *   URL:  https://v6.exchangerate-api.com/v6/{API_KEY}/latest/USD
+ *   Éxito: { "result": "success", "base_code": "USD", "conversion_rates": { "COP": 3912.77, ... } }
+ *   Error: { "result": "error", "error-type": "invalid-key" }
+ *
+ * OJO: esta API usa el campo "conversion_rates", NO "rates" (ese era el de open.er-api.com).
+ *
+ * La llave NO se escribe en el código (el repositorio es público). Se lee de la
+ * variable de entorno EXCHANGE_API_KEY.
  *
  * Relación UML: ServicioTasaCambio crea objetos TasaCambio.
  */
 public class ServicioTasaCambio {
 
+    /** Plantilla de la URL; %s se reemplaza por la llave. */
     private static final String URL_API = "https://v6.exchangerate-api.com/v6/08b7de16761b0dab67d9ae37/latest/USD";
     private static final int TIMEOUT_MS = 3000;
 
@@ -38,9 +46,9 @@ public class ServicioTasaCambio {
     private final int timeoutMs;
     private final double tasaDefecto;
 
-    /** Constructor normal: usa la URL real, 3 segundos de espera y la variable de entorno. */
+    /** Constructor normal: arma la URL con la llave de EXCHANGE_API_KEY y lee TASA_DEFECTO. */
     public ServicioTasaCambio() {
-        this(URL_API, TIMEOUT_MS, leerTasaDefecto());
+        this(String.format(URL_API, leerVariable("EXCHANGE_API_KEY")), TIMEOUT_MS, leerTasaDefecto());
     }
 
     /** Constructor con todos los datos; sirve para hacer pruebas (por ejemplo, con una URL que falle). */
@@ -55,12 +63,14 @@ public class ServicioTasaCambio {
      * Primero intenta con la API; si algo sale mal, usa la tasa por defecto.
      */
     public TasaCambio obtenerTasa() {
-
         try {
             double valor = consultarApi();
             return new TasaCambio(valor, FuenteTasa.API);
         } catch (Exception error) {
-            // Cualquier problema (sin internet, timeout, respuesta rara) termina aquí.
+            // Se muestra la causa real: sin esta línea el error queda escondido
+            // y solo se ve el mensaje de la tasa por defecto.
+            System.out.println("Error al consultar la API de tasa de cambio: "
+                    + error.getClass().getSimpleName() + " - " + error.getMessage());
             return usarTasaDefecto();
         }
     }
@@ -80,19 +90,30 @@ public class ServicioTasaCambio {
                 .build();
 
         HttpResponse<String> respuesta = cliente.send(peticion, HttpResponse.BodyHandlers.ofString());
-        System.out.printf("");
-        System.out.println("La API respondió con código " + respuesta.statusCode() + " y cuerpo: " + respuesta.body());
-        if (respuesta.statusCode() != 200) {
-            throw new IOException("La API respondió con código " + respuesta.statusCode());
-        }
-        else {
 
-        // Se lee el JSON y se busca rates -> COP
+        if (respuesta.statusCode() != 200) {
+            throw new IOException("la API respondió con código HTTP " + respuesta.statusCode());
+        }
+
         JsonObject json = JsonParser.parseString(respuesta.body()).getAsJsonObject();
-        double valor = json.getAsJsonObject("rates").get("COP").getAsDouble();
-        System.out.println("La API respondió con éxito, la tasa actual es " + valor);
+
+        // 1. La API dice en "result" si todo salió bien ("success") o mal ("error")
+        String resultado = json.get("result").getAsString();
+        if (!"success".equals(resultado)) {
+            // Ejemplos de error-type: invalid-key, inactive-account, quota-reached
+            throw new IOException("la API respondió con error: " + json.get("error-type").getAsString());
+        }
+
+        // 2. Las tasas vienen dentro de "conversion_rates"
+        JsonObject tasas = json.getAsJsonObject("conversion_rates");
+        if (tasas == null || !tasas.has("COP")) {
+            throw new IOException("la respuesta no trae la tasa COP");
+        }
+
+        double valor = tasas.get("COP").getAsDouble();
+        System.out.println("Tasa obtenida de la API: 1 USD = " + valor + " COP");
         return valor;
-          }}
+    }
 
     /** Devuelve la tasa por defecto y muestra en consola el mensaje que pide el enunciado. */
     private TasaCambio usarTasaDefecto() {
@@ -114,5 +135,11 @@ public class ServicioTasaCambio {
         } catch (NumberFormatException error) {
             return TASA_SIN_VARIABLE; // la variable existe pero no es un número
         }
+    }
+
+    /** Lee una variable de entorno; si no existe devuelve texto vacío (la API responderá error). */
+    private static String leerVariable(String nombre) {
+        String valor = System.getenv(nombre);
+        return valor == null ? "" : valor.trim();
     }
 }
