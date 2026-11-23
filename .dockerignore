@@ -1,0 +1,11 @@
+# Archivos que NO se copian a la imagen de Docker (hacen la construcción más rápida
+# y evitan meter datos locales o configuración del IDE en la imagen).
+target/
+data/
+.git/
+.idea/
+*.iml
+img/
+postman/
+*.md
+.env
