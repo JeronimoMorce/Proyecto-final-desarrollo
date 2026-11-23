@@ -11,7 +11,8 @@ import java.util.List;
  * Administrador de la tienda: gestiona clientes, inventario, boosters y torneos.
  *
  * Es el único que puede registrar clientes y crear boosters y torneos.
- * (La restricción "solo el admin puede" se validará con el rol en la entrega de la API REST.)
+ * La restricción "solo el admin puede" la revisan los controladores con el rol
+ * del usuario que hizo la petición (403 si no es ADMIN).
  *
  * Los métodos que tocan el inventario lo reciben como parámetro: así se ve en
  * el código la flecha "Administrador gestiona Inventario" del diagrama.
@@ -58,15 +59,15 @@ public class Administrador extends Usuario {
      * Crea un booster. El administrador no elige las cartas: se lo pide al
      * GeneradorBooster, que las sortea, y luego guarda el booster en el inventario.
      */
-    public Booster crearBooster(Inventario inventario, GeneradorBooster generador) {
-        Booster booster = generador.generar(inventario);
+    public Booster crearBooster(Inventario inventario, GeneradorBooster generador, double precioUsd) {
+        Booster booster = generador.generar(inventario, precioUsd);
         inventario.registrar(booster);
         return booster;
     }
 
-    /** Crea un torneo. Las inscripciones cierran el día anterior a la fecha del torneo. */
-    public Torneo crearTorneo(String nombre, LocalDate fecha, int maxParticipantes) {
-        return new Torneo(nombre, fecha, maxParticipantes);
+    /** Crea un torneo. Si fechaLimite es null, las inscripciones cierran el día anterior al torneo. */
+    public Torneo crearTorneo(String nombre, LocalDate fecha, LocalDate fechaLimite, int maxParticipantes) {
+        return new Torneo(nombre, fecha, fechaLimite, maxParticipantes);
     }
 
     /** Vista del administrador: todos los productos con su stock. */
