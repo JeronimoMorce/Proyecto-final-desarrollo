@@ -79,7 +79,7 @@ public class Main {
         new Servidor().iniciar(config.getPuerto(), new FiltroAutenticacion(autenticacion), controladores);
 
         System.out.println("==============================================");
-        System.out.println(" Cards4Play API escuchando en http://localhost:" + config.getPuerto());
+        System.out.println(" API corriendo en el puerto " + config.getPuerto());
         System.out.println(" Carpeta de datos: " + config.getCarpetaDatos());
         System.out.println(" Administrador por defecto: " + admin.getUsername());
         if (config.getLlaveApiTasa().isEmpty()) {

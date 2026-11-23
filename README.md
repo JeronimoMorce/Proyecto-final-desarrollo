@@ -16,7 +16,7 @@ Proyecto final de Desarrollo de Software — Institución Universitaria EAM (Arm
 | 1 | Diagrama de clases UML | Lista |
 | 2 | Clases codificadas (esqueleto) | Lista |
 | 3 | API REST, persistencia en volumen Docker y colección de Postman | Lista |
-| 4 | Despliegue en PaaS | Pendiente |
+| 4 | Despliegue en PaaS (Railway) | En curso |
 
 ## Tecnologías
 
@@ -24,7 +24,7 @@ Proyecto final de Desarrollo de Software — Institución Universitaria EAM (Arm
 - Spark Java 2.9.4 (microframework web)
 - Gson 2.11.0 (JSON)
 - Maven (dependencias y empaquetado en un solo `.jar`)
-- Docker (imagen en dos etapas y volumen para los datos)
+- Docker (imagen en dos etapas; volumen para los datos al ejecutar)
 - Postman (colección de pruebas en `postman/`)
 
 ## Estructura de paquetes
@@ -64,8 +64,8 @@ La llave de la API **no** se escribe en el código ni en el Dockerfile.
 1. **File > Open** y elegir la carpeta que contiene `pom.xml`. Esperar a que Maven descargue las dependencias.
 2. **Run > Edit Configurations**, seleccionar `Main` y en **Environment variables** escribir:
    `EXCHANGE_API_KEY=su_llave;TASA_DEFECTO=4000`
-3. Ejecutar `Main`. La consola muestra `Cards4Play API escuchando en http://localhost:4567`.
-4. Probar en el navegador: `http://localhost:4567/api/salud`.
+3. Ejecutar `Main`. La consola muestra `API corriendo en el puerto 4567`.
+4. Probar en el navegador: `http://localhost:4567/health`.
 
 ## Ejecutar con Docker
 
@@ -93,6 +93,23 @@ Los datos quedan en el volumen `cards4play-datos`. Para empezar desde cero: `doc
 
 En Windows (PowerShell) se cambia `\` por `` ` `` al final de cada línea, o se escribe todo en una sola línea.
 
+## Despliegue en Railway
+
+- URL pública: https://SU-APP.up.railway.app
+- Prueba: https://SU-APP.up.railway.app/health -> {"estado": "API funcionando"}
+- Railway construye con el Dockerfile de la raíz y asigna el puerto en la variable PORT.
+- Variables configuradas en Railway: EXCHANGE_API_KEY, TASA_DEFECTO, ADMIN_PASSWORD.
+- Volumen de Railway montado en /app/data.
+
+El Dockerfile no usa la instrucción `VOLUME` porque Railway la rechaza: el volumen se crea desde el panel de Railway (o con `-v` en `docker run` en el PC).
+
+Para probar localmente como en Railway:
+
+```bash
+docker build -t cards4play-railway .
+docker run --rm -p 8080:8080 -e PORT=8080 cards4play-railway
+```
+
 ## Autenticación
 
 Basic Auth en cada petición (en Postman: pestaña **Authorization > Basic Auth**).
@@ -104,6 +121,7 @@ Basic Auth en cada petición (en Postman: pestaña **Authorization > Basic Auth*
 
 | Método | Ruta | Rol | Éxito |
 |---|---|---|---|
+| GET | `/health` | Pública | 200 |
 | GET | `/api/salud` | Pública | 200 |
 | GET | `/api/ayuda` | Pública | 200 |
 | GET | `/api/yo` | Cualquiera | 200 |
@@ -119,7 +137,7 @@ Basic Auth en cada petición (en Postman: pestaña **Authorization > Basic Auth*
 | POST | `/api/cartas` | Admin | 201 |
 | POST | `/api/sellados` | Admin | 201 |
 | POST | `/api/accesorios` | Admin | 201 |
-| PUT | `/api/productos/:id` | Admin | 200 |
+| PATCH | `/api/productos/:id` (también acepta PUT) | Admin | 200 |
 | DELETE | `/api/productos/:id` | Admin | 204 |
 | GET | `/api/boosters` | Cualquiera | 200 |
 | POST | `/api/boosters` | Admin | 201 |
@@ -130,7 +148,7 @@ Basic Auth en cada petición (en Postman: pestaña **Authorization > Basic Auth*
 | GET | `/api/torneos` | Cualquiera | 200 |
 | GET | `/api/torneos/:id` | Cualquiera | 200 |
 | POST | `/api/torneos` | Admin | 201 |
-| PUT | `/api/torneos/:id` | Admin | 200 |
+| PATCH | `/api/torneos/:id` (también acepta PUT) | Admin | 200 |
 | DELETE | `/api/torneos/:id` | Admin | 204 |
 | POST | `/api/torneos/:id/inscripciones` | Cliente | 201 |
 
@@ -140,7 +158,7 @@ Basic Auth en cada petición (en Postman: pestaña **Authorization > Basic Auth*
 
 | Código | Cuándo |
 |---|---|
-| 200 OK | Consulta o modificación exitosa |
+| 200 OK | Consulta o modificación (PATCH/PUT) exitosa |
 | 201 Created | Se creó un cliente, producto, booster, compra, torneo o inscripción |
 | 204 No Content | Se eliminó un cliente, producto o torneo |
 | 400 Bad Request | Faltan campos, JSON mal escrito, rareza o fecha inválida |
