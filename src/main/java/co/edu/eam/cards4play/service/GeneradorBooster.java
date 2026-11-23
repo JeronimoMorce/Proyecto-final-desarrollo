@@ -30,13 +30,13 @@ public class GeneradorBooster {
 
     private static final int CARTAS_POR_BOOSTER = 10;
 
-    /** El enunciado no define el precio del booster; se deja en un solo lugar para cambiarlo fácil. */
-    private static final double PRECIO_BOOSTER_USD = 6.0;
+    /** Precio que se usa cuando el administrador no envía uno al crear el booster. */
+    public static final double PRECIO_BOOSTER_USD = 6.0;
 
     private final Random random = new Random();
 
     /** Crea un booster nuevo con 10 cartas tomadas del inventario. */
-    public Booster generar(Inventario inventario) {
+    public Booster generar(Inventario inventario, double precioUsd) {
         if (!hayCartasRegistradas(inventario)) {
             throw new Cards4PlayException(409, "No se puede crear el booster: no hay cartas registradas");
         }
@@ -48,7 +48,7 @@ public class GeneradorBooster {
 
         garantizarRaraOSuperior(cartas, inventario);
 
-        return new Booster("Booster Cards4Play", PRECIO_BOOSTER_USD, cartas);
+        return new Booster("Booster Cards4Play", precioUsd, cartas);
     }
 
     /** Elige UNA carta: sortea rareza, aplica respaldo y toma una carta al azar de esa rareza. */

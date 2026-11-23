@@ -18,40 +18,44 @@ import java.time.Duration;
  * Reglas del enunciado que se cumplen aquí:
  *  1. La consulta tiene un tiempo máximo de espera (timeout).
  *  2. Si la API falla o no responde, se usa una tasa por defecto y se avisa por consola.
- *  3. La tasa por defecto se lee de la variable de entorno TASA_DEFECTO.
+ *  3. La tasa por defecto viene de la variable de entorno TASA_DEFECTO.
  *  4. El resultado dice de dónde salió la tasa (API o DEFECTO).
  *
  * API usada: ExchangeRate-API v6 (con llave).
- *   URL:  https://v6.exchangerate-api.com/v6/{API_KEY}/latest/USD
- *   Éxito: { "result": "success", "base_code": "USD", "conversion_rates": { "COP": 3912.77, ... } }
+ *   URL:   https://v6.exchangerate-api.com/v6/{LLAVE}/latest/USD
+ *   Éxito: { "result": "success", "conversion_rates": { "COP": 3912.77, ... } }
  *   Error: { "result": "error", "error-type": "invalid-key" }
  *
- * OJO: esta API usa el campo "conversion_rates", NO "rates" (ese era el de open.er-api.com).
+ * La llave NO va escrita en el código: llega por la variable de entorno
+ * EXCHANGE_API_KEY (ver config/Configuracion.java). El repositorio es público.
  *
- * La llave NO se escribe en el código (el repositorio es público). Se lee de la
- * variable de entorno EXCHANGE_API_KEY.
+ * CACHÉ: cada vez que alguien lista productos se necesita la tasa. Para no gastar
+ * la cuota gratuita de la API en cada petición, una tasa obtenida de la API se
+ * reutiliza durante 10 minutos. La tasa por defecto NO se guarda en caché: en la
+ * siguiente petición se vuelve a intentar con la API.
  *
  * Relación UML: ServicioTasaCambio crea objetos TasaCambio.
  */
 public class ServicioTasaCambio {
 
-    /** Plantilla de la URL; %s se reemplaza por la llave. */
-    private static final String URL_API = "https://v6.exchangerate-api.com/v6/08b7de16761b0dab67d9ae37/latest/USD";
+    private static final String URL_API = "https://v6.exchangerate-api.com/v6/%s/latest/USD";
     private static final int TIMEOUT_MS = 3000;
-
-    /** Valor que se usa solo si la variable de entorno TASA_DEFECTO no existe. */
-    private static final double TASA_SIN_VARIABLE = 4000.0;
+    private static final long DURACION_CACHE_MS = 10 * 60 * 1000; // 10 minutos
 
     private final String urlApi;
     private final int timeoutMs;
     private final double tasaDefecto;
 
-    /** Constructor normal: arma la URL con la llave de EXCHANGE_API_KEY y lee TASA_DEFECTO. */
-    public ServicioTasaCambio() {
-        this(String.format(URL_API, leerVariable("EXCHANGE_API_KEY")), TIMEOUT_MS, leerTasaDefecto());
+    private TasaCambio ultimaTasaApi;      // última tasa que respondió la API
+    private long momentoUltimaConsulta;    // cuándo se obtuvo (milisegundos)
+
+    /** Constructor normal: arma la URL real con la llave recibida (si no hay llave, la URL queda en null). */
+    public ServicioTasaCambio(String llaveApi, double tasaDefecto) {
+        this(llaveApi == null || llaveApi.isBlank() ? null : String.format(URL_API, llaveApi.trim()),
+                TIMEOUT_MS, tasaDefecto);
     }
 
-    /** Constructor con todos los datos; sirve para hacer pruebas (por ejemplo, con una URL que falle). */
+    /** Constructor con todos los datos; sirve para pruebas (por ejemplo, con una URL que falle). */
     public ServicioTasaCambio(String urlApi, int timeoutMs, double tasaDefecto) {
         this.urlApi = urlApi;
         this.timeoutMs = timeoutMs;
@@ -60,15 +64,22 @@ public class ServicioTasaCambio {
 
     /**
      * Devuelve la tasa de cambio actual.
-     * Primero intenta con la API; si algo sale mal, usa la tasa por defecto.
+     * "synchronized": si llegan dos peticiones al mismo tiempo, la segunda espera
+     * y reutiliza la caché en vez de llamar dos veces a la API.
      */
-    public TasaCambio obtenerTasa() {
+    public synchronized TasaCambio obtenerTasa() {
+        boolean cacheVigente = ultimaTasaApi != null
+                && System.currentTimeMillis() - momentoUltimaConsulta < DURACION_CACHE_MS;
+        if (cacheVigente) {
+            return ultimaTasaApi;
+        }
         try {
             double valor = consultarApi();
-            return new TasaCambio(valor, FuenteTasa.API);
+            ultimaTasaApi = new TasaCambio(valor, FuenteTasa.API);
+            momentoUltimaConsulta = System.currentTimeMillis();
+            return ultimaTasaApi;
         } catch (Exception error) {
-            // Se muestra la causa real: sin esta línea el error queda escondido
-            // y solo se ve el mensaje de la tasa por defecto.
+            // Se muestra la causa real para poder diagnosticar el problema
             System.out.println("Error al consultar la API de tasa de cambio: "
                     + error.getClass().getSimpleName() + " - " + error.getMessage());
             return usarTasaDefecto();
@@ -77,15 +88,16 @@ public class ServicioTasaCambio {
 
     /** Hace la petición HTTP a la API y saca el valor del peso colombiano de la respuesta. */
     private double consultarApi() throws IOException, InterruptedException {
-        // Cliente HTTP con tiempo máximo para conectarse
+        if (urlApi == null) {
+            throw new IOException("no hay llave configurada (variable de entorno EXCHANGE_API_KEY)");
+        }
         HttpClient cliente = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(timeoutMs))
+                .connectTimeout(Duration.ofMillis(timeoutMs)) // tiempo máximo para conectarse
                 .build();
 
-        // Petición GET con tiempo máximo para recibir la respuesta
         HttpRequest peticion = HttpRequest.newBuilder()
                 .uri(URI.create(urlApi))
-                .timeout(Duration.ofMillis(timeoutMs))
+                .timeout(Duration.ofMillis(timeoutMs))         // tiempo máximo para recibir la respuesta
                 .GET()
                 .build();
 
@@ -98,9 +110,7 @@ public class ServicioTasaCambio {
         JsonObject json = JsonParser.parseString(respuesta.body()).getAsJsonObject();
 
         // 1. La API dice en "result" si todo salió bien ("success") o mal ("error")
-        String resultado = json.get("result").getAsString();
-        if (!"success".equals(resultado)) {
-            // Ejemplos de error-type: invalid-key, inactive-account, quota-reached
+        if (!"success".equals(json.get("result").getAsString())) {
             throw new IOException("la API respondió con error: " + json.get("error-type").getAsString());
         }
 
@@ -119,27 +129,5 @@ public class ServicioTasaCambio {
     private TasaCambio usarTasaDefecto() {
         System.out.println("La API no respondió, por lo que se toma un valor por defecto de " + tasaDefecto);
         return new TasaCambio(tasaDefecto, FuenteTasa.DEFECTO);
-    }
-
-    /**
-     * Lee la variable de entorno TASA_DEFECTO.
-     * En Docker se define con ENV en el Dockerfile y se puede cambiar con: docker run -e TASA_DEFECTO=4200
-     */
-    private static double leerTasaDefecto() {
-        String texto = System.getenv("TASA_DEFECTO");
-        if (texto == null || texto.isBlank()) {
-            return TASA_SIN_VARIABLE;
-        }
-        try {
-            return Double.parseDouble(texto);
-        } catch (NumberFormatException error) {
-            return TASA_SIN_VARIABLE; // la variable existe pero no es un número
-        }
-    }
-
-    /** Lee una variable de entorno; si no existe devuelve texto vacío (la API responderá error). */
-    private static String leerVariable(String nombre) {
-        String valor = System.getenv(nombre);
-        return valor == null ? "" : valor.trim();
     }
 }
