@@ -1,6 +1,6 @@
-# Cards4Play — Backend
+# Cards4Play — API REST
 
-Sistema backend para la tienda **Cards4Play**: gestiona el inventario de productos de juegos de cartas coleccionables (TCG), las compras de los clientes, los boosters y los torneos.
+API REST para la tienda **Cards4Play**: inventario de productos de juegos de cartas coleccionables (TCG), compras de clientes, boosters y torneos. Los datos se guardan en archivos JSON dentro de un volumen de Docker.
 
 Proyecto final de Desarrollo de Software — Institución Universitaria EAM (Armenia, Colombia).
 
@@ -14,117 +14,168 @@ Proyecto final de Desarrollo de Software — Institución Universitaria EAM (Arm
 | Entrega | Contenido | Estado |
 |---|---|---|
 | 1 | Diagrama de clases UML | Lista |
-| 2 | Clases codificadas (esqueleto de la aplicación) | Lista |
-| 3 | API REST, Docker, despliegue en PaaS y colección de Postman | Pendiente |
-
-En esta entrega la aplicación todavía no expone endpoints. La clase `Main` ejecuta una demostración por consola que recorre todo el sistema para mostrar que las clases están conectadas como en el diagrama.
+| 2 | Clases codificadas (esqueleto) | Lista |
+| 3 | API REST, persistencia en volumen Docker y colección de Postman | Lista |
+| 4 | Despliegue en PaaS | Pendiente |
 
 ## Tecnologías
 
 - Java 17
-- Maven (manejo de dependencias)
-- Gson 2.11.0 (lectura y escritura de JSON)
-- IntelliJ IDEA
-
-## Cómo ejecutar el proyecto en IntelliJ IDEA
-
-1. Clonar el repositorio: `git clone <url-del-repositorio>`
-2. En IntelliJ: **File > Open** y seleccionar la carpeta que contiene el archivo `pom.xml`.
-3. Esperar a que IntelliJ importe el proyecto Maven y descargue Gson (barra de progreso abajo a la derecha).
-4. Verificar el JDK en **File > Project Structure > Project > SDK**: debe ser 17 o superior.
-5. Abrir `src/main/java/co/edu/eam/cards4play/Main.java` y dar clic en el botón verde de ejecutar.
-
-La demostración crea la carpeta `data/` con los archivos JSON. Esa carpeta está en el `.gitignore` porque son datos generados, no código.
-
-Si en la consola las tildes salen como `?`, revisar **File > Settings > Editor > File Encodings** y dejar todo en UTF-8.
+- Spark Java 2.9.4 (microframework web)
+- Gson 2.11.0 (JSON)
+- Maven (dependencias y empaquetado en un solo `.jar`)
+- Docker (imagen en dos etapas y volumen para los datos)
+- Postman (colección de pruebas en `postman/`)
 
 ## Estructura de paquetes
 
 ```
 src/main/java/co/edu/eam/cards4play
-├── Main.java                  Punto de entrada (demostración por consola)
-├── model                      Clases del dominio: lo que existe en la tienda
-│   ├── Usuario.java           (abstracta) datos comunes y autenticación
-│   ├── Administrador.java     gestiona clientes, inventario, boosters y torneos
-│   ├── Cliente.java           consulta, compra, abre boosters y se inscribe en torneos
-│   ├── Producto.java          (abstracta) id, nombre, precio en USD y stock
-│   ├── Carta.java             producto con rareza
-│   ├── Booster.java           sobre con 10 cartas, con dueño y estado abierto/cerrado
-│   ├── ProductoSellado.java
-│   ├── Accesorio.java
-│   ├── Inventario.java        contiene todos los productos
-│   ├── Compra.java            registro de una compra (historial del cliente)
-│   ├── Torneo.java            cupos, fechas y participantes
-│   ├── TasaCambio.java        valor USD -> COP y su fuente
-│   └── enums
-│       ├── Rol.java           ADMIN, CLIENTE
-│       ├── Rareza.java        N, UC, R, SR, UR con sus probabilidades
-│       └── FuenteTasa.java    API, DEFECTO
-├── service                    Lógica que no pertenece a una sola entidad
-│   ├── GeneradorBooster.java  sortea las 10 cartas de cada booster
-│   └── ServicioTasaCambio.java consulta la API externa de tasa de cambio
-├── repository                 Persistencia en archivos JSON
-│   ├── RepositorioJson.java   guarda y lee listas de cualquier tipo
-│   ├── ConfiguracionGson.java configuración de Gson
-│   └── adapter                adaptadores para Producto y fechas
-├── exception
-│   └── Cards4PlayException.java  error de regla de negocio con su código HTTP
-└── util
-    └── GeneradorId.java       crea identificadores únicos
+├── Main.java          Arma la aplicación y enciende el servidor
+├── config             Configuracion (variables de entorno) y Servidor (Spark: filtros, errores)
+├── security           FiltroAutenticacion (Basic Auth en cada petición)
+├── controller         Rutas HTTP: Sistema, Cliente, Producto, Booster, Compra, Torneo
+├── dto                Cuerpos JSON de las peticiones, con validación de campos
+├── mapper             MapeadorRespuesta: objetos del modelo -> JSON de respuesta
+├── service            Lógica de negocio, GeneradorBooster y ServicioTasaCambio
+├── repository         AlmacenDatos y RepositorioJson (persistencia en archivos JSON)
+├── model              Entidades del dominio y enums
+├── exception          Cards4PlayException (error con código HTTP)
+└── util               GeneradorId, Seguridad (SHA-256), Conversor
 ```
 
-## Cómo se conectan las clases
+Recorrido de una petición: `FiltroAutenticacion` → `Controller` → `Service` → `model` → `AlmacenDatos` (guarda JSON) → `MapeadorRespuesta` → respuesta JSON.
 
-- **Herencia:** `Administrador` y `Cliente` heredan de `Usuario`. `Carta`, `Booster`, `ProductoSellado` y `Accesorio` heredan de `Producto`.
-- **Inventario:** contiene todos los productos. El cliente ve los disponibles (`consultarDisponibles`) y el administrador ve todo el stock (`consultarStock`).
-- **Tasa de cambio:** `ServicioTasaCambio` crea una `TasaCambio` y `Producto.calcularPrecioCop(tasa)` hace la conversión al consultar el producto. `Compra` solo guarda una copia del precio pagado.
-- **Boosters:** `Administrador.crearBooster` le pide el booster a `GeneradorBooster`, que sortea las cartas con `Rareza.sortear()` y las toma del `Inventario`.
-- **Compras:** `Cliente.comprar` crea una `Compra` y la agrega a su historial. Si el producto es un booster, queda asignado al cliente.
-- **Torneos:** `Cliente.inscribirse` delega en `Torneo.inscribir`, que valida fecha límite, inscripción duplicada y cupo.
+## Variables de entorno
 
-## Reglas de negocio implementadas
-
-| Regla | Dónde está | Código HTTP previsto |
+| Variable | Para qué | Valor por defecto |
 |---|---|---|
-| Datos inválidos o incompletos | constructores de `Producto`, `Usuario`, `Torneo` | 400 |
-| Abrir un booster ajeno | `Booster.abrir` | 403 |
-| Producto inexistente | `Inventario.buscarPorId` | 404 |
-| Booster ya vendido o producto sin stock | `Cliente.comprar`, `Booster.vender` | 409 |
-| Booster ya abierto | `Booster.abrir` | 409 |
-| Torneo sin cupo o inscripción duplicada | `Torneo.inscribir` | 409 |
-| Inscripción el día del torneo o después | `Torneo.inscribir` | 409 |
-| Crear un booster sin cartas registradas | `GeneradorBooster.generar` | 409 |
+| `PORT` | Puerto de la API | `4567` |
+| `DATA_DIR` | Carpeta de los archivos JSON | `data` (en Docker: `/app/data`) |
+| `TASA_DEFECTO` | Tasa USD→COP si la API externa falla | `4000` |
+| `EXCHANGE_API_KEY` | Llave de ExchangeRate-API | vacía (se usa la tasa por defecto) |
+| `ADMIN_USERNAME` | Usuario del administrador por defecto | `admin` |
+| `ADMIN_PASSWORD` | Contraseña del administrador por defecto | `admin123` |
+
+La llave de la API **no** se escribe en el código ni en el Dockerfile.
+
+## Ejecutar en IntelliJ IDEA
+
+1. **File > Open** y elegir la carpeta que contiene `pom.xml`. Esperar a que Maven descargue las dependencias.
+2. **Run > Edit Configurations**, seleccionar `Main` y en **Environment variables** escribir:
+   `EXCHANGE_API_KEY=su_llave;TASA_DEFECTO=4000`
+3. Ejecutar `Main`. La consola muestra `Cards4Play API escuchando en http://localhost:4567`.
+4. Probar en el navegador: `http://localhost:4567/api/salud`.
+
+## Ejecutar con Docker
+
+```bash
+# 1. Construir la imagen
+docker build -t cards4play:1.0 .
+
+# 2. Ejecutar el contenedor con volumen y variables de entorno
+docker run -d --name cards4play \
+  -p 4567:4567 \
+  -v cards4play-datos:/app/data \
+  -e TASA_DEFECTO=4100 \
+  -e EXCHANGE_API_KEY=su_llave \
+  cards4play:1.0
+
+# 3. Ver los mensajes de la aplicación
+docker logs -f cards4play
+
+# 4. Comprobar la persistencia: borrar el contenedor y crearlo de nuevo con el mismo volumen
+docker rm -f cards4play
+docker run -d --name cards4play -p 4567:4567 -v cards4play-datos:/app/data cards4play:1.0
+```
+
+Los datos quedan en el volumen `cards4play-datos`. Para empezar desde cero: `docker volume rm cards4play-datos`.
+
+En Windows (PowerShell) se cambia `\` por `` ` `` al final de cada línea, o se escribe todo en una sola línea.
+
+## Autenticación
+
+Basic Auth en cada petición (en Postman: pestaña **Authorization > Basic Auth**).
+
+- Administrador por defecto: `admin` / `admin123` (configurable con variables de entorno).
+- Los clientes los registra el administrador con `POST /api/clientes`.
+
+## Endpoints
+
+| Método | Ruta | Rol | Éxito |
+|---|---|---|---|
+| GET | `/api/salud` | Pública | 200 |
+| GET | `/api/ayuda` | Pública | 200 |
+| GET | `/api/yo` | Cualquiera | 200 |
+| GET | `/api/tasa` | Cualquiera | 200 |
+| POST | `/api/clientes` | Admin | 201 |
+| GET | `/api/clientes` | Admin | 200 |
+| GET | `/api/clientes/:id` | Admin | 200 |
+| GET | `/api/clientes/:id/compras` | Admin | 200 |
+| DELETE | `/api/clientes/:id` | Admin | 204 |
+| GET | `/api/productos?tipo=CARTA\|BOOSTER\|SELLADO\|ACCESORIO` | Cualquiera | 200 |
+| GET | `/api/productos/:id` | Cualquiera | 200 |
+| GET | `/api/cartas`, `/api/sellados`, `/api/accesorios` | Cualquiera | 200 |
+| POST | `/api/cartas` | Admin | 201 |
+| POST | `/api/sellados` | Admin | 201 |
+| POST | `/api/accesorios` | Admin | 201 |
+| PUT | `/api/productos/:id` | Admin | 200 |
+| DELETE | `/api/productos/:id` | Admin | 204 |
+| GET | `/api/boosters` | Cualquiera | 200 |
+| POST | `/api/boosters` | Admin | 201 |
+| GET | `/api/mis-boosters` | Cliente | 200 |
+| POST | `/api/boosters/:id/abrir` | Cliente | 200 |
+| POST | `/api/compras` | Cliente | 201 |
+| GET | `/api/compras` | Cliente | 200 |
+| GET | `/api/torneos` | Cualquiera | 200 |
+| GET | `/api/torneos/:id` | Cualquiera | 200 |
+| POST | `/api/torneos` | Admin | 201 |
+| PUT | `/api/torneos/:id` | Admin | 200 |
+| DELETE | `/api/torneos/:id` | Admin | 204 |
+| POST | `/api/torneos/:id/inscripciones` | Cliente | 201 |
+
+`GET /api/ayuda` devuelve esta misma lista con un ejemplo del cuerpo JSON de cada petición.
+
+## Códigos de respuesta HTTP
+
+| Código | Cuándo |
+|---|---|
+| 200 OK | Consulta o modificación exitosa |
+| 201 Created | Se creó un cliente, producto, booster, compra, torneo o inscripción |
+| 204 No Content | Se eliminó un cliente, producto o torneo |
+| 400 Bad Request | Faltan campos, JSON mal escrito, rareza o fecha inválida |
+| 401 Unauthorized | Sin usuario y contraseña, o incorrectos |
+| 403 Forbidden | Cliente en acción de admin (o al revés), abrir booster ajeno |
+| 404 Not Found | Cliente, producto, booster, torneo o ruta inexistente |
+| 409 Conflict | Booster vendido o abierto, sin stock, torneo sin cupo o cerrado, inscripción o usuario duplicado |
+| 500 Internal Server Error | Error inesperado del servidor |
+
+Todos los errores responden con el mismo formato:
+
+```json
+{ "error": "Faltan datos obligatorios: rareza", "codigo": 400, "camposFaltantes": ["rareza"], "ejemplo": { "...": "..." } }
+```
 
 ## API externa y tasa por defecto
 
-- **API utilizada:** `https://open.er-api.com/v6/latest/USD` (ExchangeRate-API, acceso abierto sin llave).
+- **API:** ExchangeRate-API v6 — `https://v6.exchangerate-api.com/v6/{EXCHANGE_API_KEY}/latest/USD`
 - **Tiempo máximo de espera:** 3 segundos.
-- **Tasa por defecto:** se lee de la variable de entorno `TASA_DEFECTO`. Si la variable no existe se usa `4000.0`.
-- Cuando la API no responde, la consola muestra: `La API no respondió, por lo que se toma un valor por defecto de X`.
+- **Caché:** una tasa obtenida de la API se reutiliza 10 minutos para no agotar la cuota gratuita.
+- **Tasa por defecto:** variable `TASA_DEFECTO` (4000 si no existe). Si la API falla, la consola muestra `La API no respondió, por lo que se toma un valor por defecto de X`.
+- Toda respuesta con precios en COP incluye `"fuenteTasa": "API"` o `"fuenteTasa": "DEFECTO"`.
 
-Para probar otra tasa por defecto en IntelliJ: **Run > Edit Configurations > Environment variables** y agregar `TASA_DEFECTO=4200`.
+## Pruebas con Postman
+
+Importar `postman/Cards4Play.postman_collection.json` y ejecutar las carpetas en orden (0 a 6) o con **Run collection**. Cada petición guarda los ids que usan las siguientes. La carpeta 6 contiene un caso de error por cada código HTTP.
+
+Para repetir la colección desde cero hay que borrar los datos (carpeta `data/` o el volumen de Docker), porque los clientes ya existirán.
 
 ## Flujo de trabajo con Git
 
-- La rama `main` siempre contiene una versión que compila y se puede ejecutar.
-- Cada funcionalidad se desarrolla en su propia rama `feature/nombre-corto` y se integra a `main` con un merge.
-- Antes de crear una rama nueva: `git checkout main` y `git pull origin main`.
-- Mensajes de commit descriptivos con un prefijo:
-  - `feat:` funcionalidad nueva
-  - `fix:` corrección de un error
-  - `docs:` documentación
-  - `chore:` configuración del proyecto
-  - `refactor:` mejora del código sin cambiar lo que hace
+- `main` siempre contiene una versión que compila.
+- Cada funcionalidad en su rama `feature/...`, integrada a `main` con Pull Request y merge.
+- Commits con prefijo: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`.
 
 ## Resolución de un conflicto de fusión
 
-> Pendiente: documentar aquí el conflicto que se presente (qué archivo, por qué ocurrió y cómo se resolvió).
-
-## Pendiente para la siguiente entrega
-
-- Exponer la funcionalidad como API REST con Spark Java.
-- Autenticación por petición y restricción de acciones según el rol.
-- Cargar los datos desde los archivos JSON al iniciar y guardarlos en cada cambio.
-- Dockerfile con la variable `TASA_DEFECTO` y volumen para la carpeta `data/`.
-- Despliegue en una plataforma PaaS.
-- Colección de Postman con casos exitosos y de error.
+> Pendiente: documentar aquí el conflicto (qué archivo, por qué ocurrió y cómo se resolvió).
