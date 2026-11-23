@@ -28,19 +28,10 @@ public abstract class Producto {
      * @param prefijoId texto corto para el id, por ejemplo "CAR" para cartas
      */
     protected Producto(String prefijoId, String nombre, double precioUsd, int stock) {
-        if (nombre == null || nombre.isBlank()) {
-            throw new Cards4PlayException(400, "El nombre del producto es obligatorio");
-        }
-        if (precioUsd <= 0) {
-            throw new Cards4PlayException(400, "El precio en USD debe ser mayor que cero");
-        }
-        if (stock < 0) {
-            throw new Cards4PlayException(400, "El stock no puede ser negativo");
-        }
         this.id = GeneradorId.generar(prefijoId);
-        this.nombre = nombre;
-        this.precioUsd = precioUsd;
-        this.stock = stock;
+        cambiarNombre(nombre);
+        cambiarPrecioUsd(precioUsd);
+        cambiarStock(stock);
     }
 
     /**
@@ -65,6 +56,30 @@ public abstract class Producto {
         stock--;
     }
 
+    // ---------- Métodos para modificar (los usa PUT /api/productos/:id) ----------
+    // Cada uno valida antes de cambiar, así el objeto nunca queda con datos inválidos.
+
+    public void cambiarNombre(String nuevoNombre) {
+        if (nuevoNombre == null || nuevoNombre.isBlank()) {
+            throw new Cards4PlayException(400, "El nombre del producto es obligatorio");
+        }
+        this.nombre = nuevoNombre.trim();
+    }
+
+    public void cambiarPrecioUsd(double nuevoPrecio) {
+        if (nuevoPrecio <= 0) {
+            throw new Cards4PlayException(400, "El precio en USD debe ser mayor que cero");
+        }
+        this.precioUsd = nuevoPrecio;
+    }
+
+    public void cambiarStock(int nuevoStock) {
+        if (nuevoStock < 0) {
+            throw new Cards4PlayException(400, "El stock no puede ser negativo");
+        }
+        this.stock = nuevoStock;
+    }
+
     public String getId() {
         return id;
     }
@@ -81,7 +96,11 @@ public abstract class Producto {
         return stock;
     }
 
-    /** getClass().getSimpleName() devuelve el nombre de la clase real: "Carta", "Booster", etc. */
+    /** Nombre del tipo en mayúsculas: "CARTA", "BOOSTER", "PRODUCTOSELLADO", "ACCESORIO". */
+    public String getTipo() {
+        return getClass().getSimpleName().toUpperCase();
+    }
+
     @Override
     public String toString() {
         return getClass().getSimpleName() + " [" + id + "] " + nombre

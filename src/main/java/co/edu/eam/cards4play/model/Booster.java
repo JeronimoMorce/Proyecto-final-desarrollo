@@ -48,9 +48,14 @@ public class Booster extends Producto {
         descontarStock(); // el stock pasa de 1 a 0 y deja de estar disponible
     }
 
+    /** ¿Este cliente es el dueño del booster? */
+    public boolean esDe(Cliente cliente) {
+        return estaVendido() && propietarioId.equals(cliente.getId());
+    }
+
     /** Abre el booster y devuelve sus cartas. Solo el dueño puede hacerlo, una vez. */
     public List<Carta> abrir(Cliente cliente) {
-        if (!estaVendido() || !propietarioId.equals(cliente.getId())) {
+        if (!esDe(cliente)) {
             throw new Cards4PlayException(403, "Solo el dueño del booster puede abrirlo");
         }
         if (abierto) {
@@ -69,6 +74,15 @@ public class Booster extends Producto {
             return new ArrayList<>(cartas);
         }
         return new ArrayList<>();
+    }
+
+    /** El stock de un booster no se edita a mano: es 1 hasta que se vende y 0 después. */
+    @Override
+    public void cambiarStock(int nuevoStock) {
+        if (cartas != null) { // cartas es null solo durante el constructor de Producto
+            throw new Cards4PlayException(409, "El stock de un booster no se puede modificar");
+        }
+        super.cambiarStock(nuevoStock);
     }
 
     public boolean isAbierto() {

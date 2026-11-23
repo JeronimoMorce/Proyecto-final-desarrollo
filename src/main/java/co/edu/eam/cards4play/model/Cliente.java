@@ -10,9 +10,8 @@ import java.util.List;
 /**
  * Cliente de la tienda: consulta productos, compra, abre sus boosters y se inscribe en torneos.
  *
- * Fíjense que el Cliente casi no tiene lógica propia: le PIDE el trabajo a las
- * otras clases (Inventario, Booster, Torneo). Eso es lo que muestran las
- * flechas del diagrama UML.
+ * El Cliente casi no tiene lógica propia: le PIDE el trabajo a las otras
+ * clases (Inventario, Booster, Torneo). Eso es lo que muestran las flechas del UML.
  *
  * Relaciones UML:
  *  - Hereda de Usuario.
@@ -43,6 +42,9 @@ public class Cliente extends Usuario {
         if (producto == null) {
             throw new Cards4PlayException(404, "El producto que se quiere comprar no existe");
         }
+        if (producto instanceof Booster && ((Booster) producto).estaVendido()) {
+            throw new Cards4PlayException(409, "El booster " + producto.getId() + " ya fue vendido");
+        }
         if (!producto.estaDisponible()) {
             throw new Cards4PlayException(409, "El producto " + producto.getNombre() + " ya no está disponible");
         }
@@ -70,16 +72,30 @@ public class Cliente extends Usuario {
         torneo.inscribir(this, LocalDate.now());
     }
 
+    /** Además de lo de Usuario, el historial debe existir y cada compra debe apuntar a un producto. */
+    @Override
+    public boolean tieneDatosCompletos() {
+        if (!super.tieneDatosCompletos() || historial == null) {
+            return false;
+        }
+        for (Compra compra : historial) {
+            if (compra.getProductoId() == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public List<Compra> getHistorial() {
         return new ArrayList<>(historial);
     }
 
-    /** Recorre el historial y devuelve solo los boosters comprados (abiertos o no). */
-    public List<Booster> getMisBoosters() {
+    /** Busca en el inventario los boosters cuyo dueño es este cliente (abiertos o no). */
+    public List<Booster> getMisBoosters(Inventario inventario) {
         List<Booster> boosters = new ArrayList<>();
-        for (Compra compra : historial) {
-            if (compra.getProducto() instanceof Booster) {
-                boosters.add((Booster) compra.getProducto());
+        for (Producto producto : inventario.consultarStock()) {
+            if (producto instanceof Booster && ((Booster) producto).esDe(this)) {
+                boosters.add((Booster) producto);
             }
         }
         return boosters;

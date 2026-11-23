@@ -16,8 +16,12 @@ import java.util.List;
  *  2. No se puede superar el número máximo de participantes.
  *  3. Un cliente no puede inscribirse dos veces.
  *
+ * CAMBIO EN LA ENTREGA 3: los participantes se guardan por id (participantesIds)
+ * y no como objetos Cliente completos. Así cada cliente existe una sola vez
+ * (en clientes.json) y el torneo solo apunta a él.
+ *
  * Relaciones UML:
- *  - Torneo tiene muchos Cliente como participantes (agregación).
+ *  - Torneo tiene muchos Cliente como participantes (agregación, por id).
  *  - Administrador crea los torneos.
  */
 public class Torneo {
@@ -27,33 +31,17 @@ public class Torneo {
     private LocalDate fecha;
     private LocalDate fechaLimiteInscripcion;
     private int maxParticipantes;
-    private List<Cliente> participantes;
+    private List<String> participantesIds;
 
-    /** Constructor corto: la fecha límite de inscripción es el día anterior al torneo. */
-    public Torneo(String nombre, LocalDate fecha, int maxParticipantes) {
-        this(nombre, fecha, fecha == null ? null : fecha.minusDays(1), maxParticipantes);
-    }
-
-    /** Constructor completo: permite elegir la fecha límite de inscripción. */
+    /**
+     * @param fechaLimiteInscripcion si es null, se usa el día anterior al torneo
+     */
     public Torneo(String nombre, LocalDate fecha, LocalDate fechaLimiteInscripcion, int maxParticipantes) {
-        if (nombre == null || nombre.isBlank()) {
-            throw new Cards4PlayException(400, "El nombre del torneo es obligatorio");
-        }
-        if (fecha == null || !fecha.isAfter(LocalDate.now())) {
-            throw new Cards4PlayException(400, "La fecha del torneo debe ser posterior a hoy");
-        }
-        if (fechaLimiteInscripcion == null || !fechaLimiteInscripcion.isBefore(fecha)) {
-            throw new Cards4PlayException(400, "La fecha límite de inscripción debe ser anterior al día del torneo");
-        }
-        if (maxParticipantes <= 0) {
-            throw new Cards4PlayException(400, "El máximo de participantes debe ser mayor que cero");
-        }
         this.id = GeneradorId.generar("TOR");
-        this.nombre = nombre;
-        this.fecha = fecha;
-        this.fechaLimiteInscripcion = fechaLimiteInscripcion;
-        this.maxParticipantes = maxParticipantes;
-        this.participantes = new ArrayList<>();
+        this.participantesIds = new ArrayList<>();
+        cambiarNombre(nombre);
+        cambiarFechas(fecha, fechaLimiteInscripcion);
+        cambiarMaxParticipantes(maxParticipantes);
     }
 
     /**
@@ -66,17 +54,12 @@ public class Torneo {
 
     /** ¿Quedan cupos libres? */
     public boolean hayCupo() {
-        return participantes.size() < maxParticipantes;
+        return participantesIds.size() < maxParticipantes;
     }
 
-    /** ¿El cliente ya está inscrito? Se compara por id. */
+    /** ¿El cliente ya está inscrito? */
     public boolean estaInscrito(Cliente cliente) {
-        for (Cliente participante : participantes) {
-            if (participante.getId().equals(cliente.getId())) {
-                return true;
-            }
-        }
-        return false;
+        return participantesIds.contains(cliente.getId());
     }
 
     /** Inscribe al cliente si se cumplen las tres reglas; si no, lanza un error 409. */
@@ -86,12 +69,51 @@ public class Torneo {
                     + " cerraron el " + fechaLimiteInscripcion);
         }
         if (estaInscrito(cliente)) {
-            throw new Cards4PlayException(409, "El cliente " + cliente.getUsername() + " ya tiene una inscripción en el torneo " + nombre);
+            throw new Cards4PlayException(409, "El cliente " + cliente.getUsername()
+                    + " ya tiene una inscripción en el torneo " + nombre);
         }
         if (!hayCupo()) {
             throw new Cards4PlayException(409, "El torneo " + nombre + " no tiene cupos disponibles");
         }
-        participantes.add(cliente);
+        participantesIds.add(cliente.getId());
+    }
+
+    // ---------- Métodos para modificar (los usa PUT /api/torneos/:id) ----------
+
+    public void cambiarNombre(String nuevoNombre) {
+        if (nuevoNombre == null || nuevoNombre.isBlank()) {
+            throw new Cards4PlayException(400, "El nombre del torneo es obligatorio");
+        }
+        this.nombre = nuevoNombre.trim();
+    }
+
+    /** Cambia la fecha del torneo y la fecha límite juntas, porque una depende de la otra. */
+    public void cambiarFechas(LocalDate nuevaFecha, LocalDate nuevaFechaLimite) {
+        if (nuevaFecha == null || !nuevaFecha.isAfter(LocalDate.now())) {
+            throw new Cards4PlayException(400, "La fecha del torneo debe ser posterior a hoy");
+        }
+        LocalDate limite = (nuevaFechaLimite == null) ? nuevaFecha.minusDays(1) : nuevaFechaLimite;
+        if (!limite.isBefore(nuevaFecha)) {
+            throw new Cards4PlayException(400, "La fecha límite de inscripción debe ser anterior al día del torneo");
+        }
+        this.fecha = nuevaFecha;
+        this.fechaLimiteInscripcion = limite;
+    }
+
+    public void cambiarMaxParticipantes(int nuevoMax) {
+        if (nuevoMax <= 0) {
+            throw new Cards4PlayException(400, "El máximo de participantes debe ser mayor que cero");
+        }
+        if (nuevoMax < participantesIds.size()) {
+            throw new Cards4PlayException(409, "Ya hay " + participantesIds.size()
+                    + " inscritos; el máximo no puede ser menor");
+        }
+        this.maxParticipantes = nuevoMax;
+    }
+
+    /** Igual que en Usuario: detecta torneos guardados con el formato de la entrega anterior. */
+    public boolean tieneDatosCompletos() {
+        return id != null && fecha != null && fechaLimiteInscripcion != null && participantesIds != null;
     }
 
     public String getId() {
@@ -114,14 +136,7 @@ public class Torneo {
         return maxParticipantes;
     }
 
-    public List<Cliente> getParticipantes() {
-        return new ArrayList<>(participantes); // copia: desde afuera no se puede modificar la lista real
-    }
-
-    @Override
-    public String toString() {
-        return "Torneo [" + id + "] " + nombre + " | fecha: " + fecha
-                + " | inscripciones hasta: " + fechaLimiteInscripcion
-                + " | inscritos: " + participantes.size() + "/" + maxParticipantes;
+    public List<String> getParticipantesIds() {
+        return new ArrayList<>(participantesIds); // copia: desde afuera no se puede modificar la lista real
     }
 }

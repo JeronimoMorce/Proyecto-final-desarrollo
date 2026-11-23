@@ -43,6 +43,15 @@ public class Inventario {
         throw new Cards4PlayException(404, "No existe un producto con id " + id);
     }
 
+    /** Quita un producto del inventario. Un booster ya vendido no se puede quitar: pertenece a un cliente. */
+    public void eliminar(String id) {
+        Producto producto = buscarPorId(id);
+        if (producto instanceof Booster && ((Booster) producto).estaVendido()) {
+            throw new Cards4PlayException(409, "El booster " + id + " ya fue vendido y pertenece a un cliente");
+        }
+        productos.remove(producto);
+    }
+
     /** Vista del cliente: productos que todavía se pueden comprar. */
     public List<Producto> consultarDisponibles() {
         List<Producto> disponibles = new ArrayList<>();
