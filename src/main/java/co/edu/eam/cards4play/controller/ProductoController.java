@@ -9,9 +9,11 @@ import co.edu.eam.cards4play.model.TasaCambio;
 import co.edu.eam.cards4play.service.ProductoService;
 import co.edu.eam.cards4play.service.ServicioTasaCambio;
 import spark.Request;
+import spark.Route;
 
 import static spark.Spark.delete;
 import static spark.Spark.get;
+import static spark.Spark.patch;
 import static spark.Spark.post;
 import static spark.Spark.put;
 
@@ -84,12 +86,16 @@ public class ProductoController extends ControladorBase {
         });
 
         // ---------- Modificar y eliminar (admin) ----------
-        put("/api/productos/:id", (request, response) -> {
+        // PATCH = modificar solo algunos campos. Se guarda el manejador en una variable
+        // (Route) para registrarlo en PATCH y en PUT sin repetir código.
+        Route actualizar = (request, response) -> {
             requerirAdmin(request);
             ActualizarProductoRequest datos = leerCuerpo(request, ActualizarProductoRequest.class);
             Producto producto = servicio.actualizar(request.params(":id"), datos);
             return json(MapeadorRespuesta.producto(producto, servicioTasa.obtenerTasa()));
-        });
+        };
+        patch("/api/productos/:id", actualizar);
+        put("/api/productos/:id", actualizar);
 
         delete("/api/productos/:id", (request, response) -> {
             requerirAdmin(request);

@@ -6,12 +6,14 @@ import co.edu.eam.cards4play.mapper.MapeadorRespuesta;
 import co.edu.eam.cards4play.model.Torneo;
 import co.edu.eam.cards4play.repository.AlmacenDatos;
 import co.edu.eam.cards4play.service.TorneoService;
+import spark.Route;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static spark.Spark.delete;
 import static spark.Spark.get;
+import static spark.Spark.patch;
 import static spark.Spark.post;
 import static spark.Spark.put;
 
@@ -51,12 +53,15 @@ public class TorneoController extends ControladorBase {
             return json(MapeadorRespuesta.torneo(torneo, almacen));
         });
 
-        put("/api/torneos/:id", (request, response) -> {
+        // PATCH y PUT usan el mismo manejador (ver ProductoController)
+        Route actualizar = (request, response) -> {
             requerirAdmin(request);
             ActualizarTorneoRequest datos = leerCuerpo(request, ActualizarTorneoRequest.class);
             Torneo torneo = servicio.actualizar(request.params(":id"), datos);
             return json(MapeadorRespuesta.torneo(torneo, almacen));
-        });
+        };
+        patch("/api/torneos/:id", actualizar);
+        put("/api/torneos/:id", actualizar);
 
         delete("/api/torneos/:id", (request, response) -> {
             requerirAdmin(request);

@@ -45,6 +45,14 @@ public class SistemaController extends ControladorBase {
             return json(respuesta);
         });
 
+        // Ruta de salud que pide la guía de despliegue. No empieza por /api/,
+        // así que FiltroAutenticacion la deja pasar sin usuario ni contraseña.
+        get("/health", (request, response) -> {
+            Map<String, Object> respuesta = new LinkedHashMap<>();
+            respuesta.put("estado", "API funcionando");
+            return json(respuesta);
+        });
+
         get("/api/ayuda", (request, response) -> json(construirAyuda()));
 
         get("/api/yo", (request, response) -> json(MapeadorRespuesta.usuario(usuarioActual(request))));
