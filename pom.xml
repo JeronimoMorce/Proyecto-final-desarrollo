@@ -9,7 +9,7 @@
     <artifactId>cards4play</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>Cards4Play</name>
-    <description>Backend de Cards4Play: inventario, compras, boosters y torneos</description>
+    <description>API REST de Cards4Play: inventario, compras, boosters y torneos</description>
 
     <properties>
         <!-- Versión de Java con la que se compila el proyecto -->
@@ -18,20 +18,72 @@
     </properties>
 
     <dependencies>
-        <!-- Gson: convierte objetos Java a JSON y al revés.
-             Lo usamos para la persistencia en archivos y para leer la respuesta de la API de tasa de cambio. -->
-        <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>2.11.0</version>
-        </dependency>
-
-        <!-- Entrega 3 (API REST): quitar este comentario para agregar Spark Java.
+        <!-- Spark Java: microframework para crear la API REST (rutas get/post/put/delete).
+             Trae por dentro el servidor web Jetty. -->
         <dependency>
             <groupId>com.sparkjava</groupId>
             <artifactId>spark-core</artifactId>
             <version>2.9.4</version>
         </dependency>
-        -->
+
+        <!-- Spark escribe sus mensajes con SLF4J; esta librería los muestra en consola.
+             Sin ella aparece el aviso "SLF4J: Failed to load class". -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.7.36</version>
+        </dependency>
+
+        <!-- Gson: convierte objetos Java a JSON y al revés (archivos y respuestas de la API). -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
     </dependencies>
+
+    <build>
+        <!-- El archivo final se llamará target/cards4play.jar -->
+        <finalName>cards4play</finalName>
+
+        <plugins>
+            <!-- maven-shade-plugin arma un "fat jar": un solo .jar con nuestro código
+                 y TODAS las librerías adentro. Así Docker solo necesita "java -jar cards4play.jar". -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <!-- Indica cuál clase tiene el main -->
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>co.edu.eam.cards4play.Main</mainClass>
+                                </transformer>
+                                <!-- Une los archivos de configuración internos de Jetty -->
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <filters>
+                                <!-- Quita firmas de librerías que harían fallar el jar combinado -->
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
