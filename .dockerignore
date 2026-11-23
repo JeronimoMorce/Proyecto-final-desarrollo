@@ -1,11 +1,33 @@
 # Archivos que NO se copian a la imagen de Docker (hacen la construcción más rápida
 # y evitan meter datos locales o configuración del IDE en la imagen).
+# ---- Archivos compilados de Java / Maven ----
 target/
-data/
-.git/
+out/
+*.class
+*.jar
+*.war
+
+# ---- IntelliJ IDEA ----
 .idea/
 *.iml
-img/
-postman/
-*.md
+*.iws
+*.ipr
+
+# ---- Otros IDE (por si algún integrante usa otro) ----
+.vscode/
+.classpath
+.project
+.settings/
+nbproject/
+
+# ---- Datos generados por la aplicación ----
+# Los archivos JSON se crean al ejecutar; no son código, por eso no se suben.
+data/
+
+# ---- Sistema operativo y registros ----
+.DS_Store
+Thumbs.db
+*.log
+
+# ---- Variables locales (llaves y contraseñas) ----
 .env
